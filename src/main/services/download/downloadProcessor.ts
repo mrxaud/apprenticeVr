@@ -478,7 +478,6 @@ export class DownloadProcessor {
           sourcePath,
           destPath,
           startOffset,
-          file.size,
           (progress) => {
             const fileProgress = totalCopied + progress
             const overallProgress = Math.round((fileProgress / totalSize) * 100)
@@ -730,7 +729,6 @@ export class DownloadProcessor {
     sourcePath: string,
     destPath: string,
     startOffset: number,
-    totalSize: number,
     onProgress: (progress: number) => void,
     cancellationToken: { cancelled: boolean }
   ): Promise<number> {
