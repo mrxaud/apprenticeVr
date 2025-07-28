@@ -1,17 +1,13 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, readFileSync } from 'fs'
-import { randomBytes } from 'crypto'
+import { existsSync, readFileSync, unlinkSync } from 'fs'
+import SevenZip from 'node-7z'
+import dependencyService from './dependencyService'
 import { LogsAPI } from '@shared/types'
 
 class LogsService implements LogsAPI {
   public getLogFilePath(): string {
     return join(join(app.getPath('userData'), 'logs'), 'main.log')
-  }
-
-  private generateSimplePassword(): string {
-    // Generate 3 random bytes and convert to base36 for a simple, short password
-    return randomBytes(3).toString('hex').slice(0, 6)
   }
 
   async uploadCurrentLog(): Promise<{ url: string; password: string } | null> {
@@ -22,70 +18,80 @@ class LogsService implements LogsAPI {
       return null
     }
 
+    // Create temporary zip file path
+    const zipFilePath = join(app.getPath('userData'), 'temp-log.zip')
+
     try {
-      console.log('[LogsService] Uploading log file to pub.microbin.eu...')
+      console.log('[LogsService] Compressing log file...')
 
-      // Read the log file content
-      const logContent = readFileSync(logFilePath, 'utf-8')
+      // Remove existing zip file if it exists
+      if (existsSync(zipFilePath)) {
+        unlinkSync(zipFilePath)
+      }
 
-      // Generate a simple password for this upload
-      const password = this.generateSimplePassword()
+      // Check if 7zip is ready
+      if (!dependencyService.getStatus().sevenZip.ready) {
+        throw new Error('7zip is not available. Cannot compress log file.')
+      }
 
-      // Create FormData for multipart upload
+      // Compress the log file using SevenZip
+      await new Promise<void>((resolve, reject) => {
+        const myStream = SevenZip.add(zipFilePath, logFilePath, {
+          $bin: dependencyService.get7zPath()
+        })
+
+        myStream.on('end', () => {
+          console.log('[LogsService] Log file compressed successfully')
+          resolve()
+        })
+
+        myStream.on('error', (error) => {
+          console.error('[LogsService] Compression error:', error)
+          reject(error)
+        })
+      })
+
+      console.log('[LogsService] Uploading compressed log file to catbox.moe...')
+
+      // Read the compressed file content
+      const zipContent = readFileSync(zipFilePath)
+
+      // Create FormData for catbox upload
       const formData = new FormData()
-      formData.append('expiration', '3days')
-      formData.append('burn_after', '0')
-      formData.append('syntax_highlight', 'none')
-      formData.append('privacy', 'readonly')
-      formData.append('content', '')
-      formData.append('plain_key', password)
+      formData.append('userhash', '') // Empty userhash for anonymous upload
+      formData.append('reqtype', 'fileupload')
 
-      // Create a Blob for the file content and append it
-      const fileBlob = new Blob([logContent], { type: 'application/octet-stream' })
-      formData.append('file', fileBlob, 'apprenticevr-main.log')
+      // Create a Blob for the zip file content and append it
+      const fileBlob = new Blob([zipContent], { type: 'application/zip' })
+      formData.append('fileToUpload', fileBlob, 'apprenticevr-main.log.zip')
 
-      // Upload to pub.microbin.eu
-      const response = await fetch('https://pub.microbin.eu/upload', {
+      // Upload to catbox.moe
+      const response = await fetch('https://catbox.moe/user/api.php', {
         method: 'POST',
         body: formData
       })
 
-      // Handle successful responses
-      if (response.status === 302) {
-        const location = response.headers.get('Location')
-        if (location) {
-          // If location is relative, make it absolute
-          const shareableUrl = location.startsWith('http')
-            ? location
-            : `https://pub.microbin.eu${location}`
-          console.log('[LogsService] Log file uploaded successfully:', shareableUrl)
-          return { url: shareableUrl, password }
-        } else {
-          throw new Error('302 redirect received but no Location header found')
-        }
-      } else if (response.status === 200) {
-        // Parse response body to extract URL from JavaScript
-        const responseText = await response.text()
-
-        // Look for the pattern: const url = (`` === "") ? `https://pub.microbin.eu/upload/...` : `/p/...`
-        const urlMatch = responseText.match(
-          /const url = \(`[^`]*` === ""\) \? `(https:\/\/pub\.microbin\.eu\/upload\/[^`]+)` : `[^`]*`/
-        )
-
-        if (urlMatch && urlMatch[1]) {
-          const shareableUrl = urlMatch[1]
-          console.log('[LogsService] Log file uploaded successfully:', shareableUrl)
-          return { url: shareableUrl, password }
-        } else {
-          throw new Error('200 response received but could not extract URL from JavaScript')
-        }
+      if (response.ok) {
+        // Catbox returns the URL directly as plain text
+        const shareableUrl = await response.text()
+        console.log('[LogsService] Compressed log file uploaded successfully:', shareableUrl)
+        return { url: shareableUrl.trim(), password: '' } // No password needed for catbox
       } else {
-        // Treat as error
         throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
-      console.error('[LogsService] Failed to upload log file:', error)
+      console.error('[LogsService] Failed to compress or upload log file:', error)
       return null
+    } finally {
+      // Clean up temporary zip file
+      if (existsSync(zipFilePath)) {
+        try {
+          unlinkSync(zipFilePath)
+          console.log('[LogsService] Temporary zip file cleaned up')
+        } catch (cleanupError) {
+          console.warn('[LogsService] Failed to clean up temporary zip file:', cleanupError)
+        }
+      }
     }
   }
 }

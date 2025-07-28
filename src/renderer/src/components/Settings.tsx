@@ -292,7 +292,7 @@ const LogUploadSettings: React.FC = () => {
     <Card className={styles.card}>
       <CardHeader description={<Subtitle1 weight="semibold">Log Upload</Subtitle1>} />
       <div className={styles.cardContent}>
-        <Text>Upload the current log file to https://pub.microbin.eu for sharing with support</Text>
+        <Text>Upload the current log file to https://catbox.moe for sharing with support</Text>
 
         <div className={styles.formRow}>
           <Button
@@ -308,7 +308,7 @@ const LogUploadSettings: React.FC = () => {
 
         {uploadError && <Text className={styles.error}>{uploadError}</Text>}
 
-        {uploadSuccess && shareableUrl && password && (
+        {uploadSuccess && shareableUrl && (
           <div className={styles.success}>
             <CheckmarkCircleRegular />
             <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS }}>
@@ -332,36 +332,46 @@ const LogUploadSettings: React.FC = () => {
                 </div>
               </div>
 
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}
-              >
-                <Text weight="semibold">Password:</Text>
+              {password && (
                 <div
-                  style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: tokens.spacingVerticalXS
+                  }}
                 >
-                  <Input
-                    value={password}
-                    readOnly
+                  <Text weight="semibold">Password:</Text>
+                  <div
                     style={{
-                      width: '200px',
-                      fontFamily: 'monospace',
-                      fontSize: '14px',
-                      fontWeight: 'bold'
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: tokens.spacingHorizontalS
                     }}
-                  />
-                  <Button onClick={handleCopyPassword} size="small" appearance="secondary">
-                    Copy Password
-                  </Button>
+                  >
+                    <Input
+                      value={password}
+                      readOnly
+                      style={{
+                        width: '200px',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}
+                    />
+                    <Button onClick={handleCopyPassword} size="small" appearance="secondary">
+                      Copy Password
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
 
         <Text className={styles.hint}>
           <InfoRegular />
-          The uploaded log file will be available for 3 days and requires the password to delete.
-          Share only the URL with support for troubleshooting.
+          The uploaded log file will be available on catbox.moe. Share only the URL with support for
+          troubleshooting.
         </Text>
       </div>
     </Card>
